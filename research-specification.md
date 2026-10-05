@@ -5,13 +5,11 @@
 
 ## Research question
 
-Can a Transformer infer an opponent’s hidden, occasionally changing strategy from situations, noisy clues, and moves—and express its uncertainty accurately compared with a Bayesian model?
+Can a Transformer trained to predict an opponent’s next move from situations, clues, and previous moves develop internal patterns that let a separate probe estimate the opponent’s hidden, occasionally changing strategy? How close are the probe’s strategy estimates to those of a Bayesian model that knows the game’s rules?
 
 ## In plain language
 
-We will create a detective game with an opponent whose behavior follows one of four hidden strategies. The player and model see situations, clues, and moves, then try to work out which strategy is active and predict what the opponent will do next.
-
-Because we control how the opponent is generated, we know the hidden strategy. That lets us compare the Transformer’s predictions with the truth and with a Bayesian model that knows the game’s rules.
+We will create a detective game with an opponent whose behavior follows one of four hidden strategies. The Transformer learns to predict the opponent’s next move from the situations, clues, and moves it has observed. After training, a separate probe will check whether the Transformer’s internal patterns contain information about which strategy is active. The probe’s estimates will be compared with the known truth and with a Bayesian model that knows the game’s rules.
 
 ## Scope and terminology
 
@@ -44,32 +42,23 @@ The player and model see the situation and clue before the move. After the move 
 
 ## What the model sees and predicts
 
-Before each move, the model receives:
+Before each move, the Transformer receives the current situation and clue, along with the situations, clues, and revealed moves from previous rounds. It predicts probabilities for the two possible moves, A and B.
 
-- The current situation and clue.
-- The situations, clues, and observed moves from previous rounds.
-
-It predicts:
-
-1. The probability of move A or B on this round.
-2. Its probability estimate for each of the four strategies.
-
-The model does not receive the hidden strategy or the unrevealed move as input. During training, the known strategy and move may be used as answer labels.
+The current move is not included in the input. Once revealed, it becomes part of the history for later predictions. In this baseline, the Transformer does not directly output probabilities for the hidden strategy. After training, a separate probe will examine the frozen Transformer’s internal patterns and estimate the active strategy. The later sections describe this probe.
 
 ## Comparison models
 
-We will compare the Transformer with:
+We will evaluate the Transformer’s next-move predictions and, separately, the strategy estimates produced by the post-training probe.
 
-- **A Bayesian oracle:** a probability calculator that knows the game-generation rules and updates its strategy estimates as clues and moves arrive.
-- **A simple baseline:** a predictor that does not use the full within-case history to track strategy. Its exact form will be specified before final evaluation.
+We will compare the probe’s strategy estimates with a Bayesian oracle. The oracle knows the game-generation rules and updates its estimates as situations, clues, and moves arrive. It serves as a reference for this designed environment, not as a claim of perfect reasoning in every detective story or in real life.
 
-The Bayesian oracle is a reference for this designed environment. It does not represent perfect reasoning in every detective story or real-world situation.
+We will also use a simple next-move predictor that does not track the full within-case history. Its exact form will be specified before final evaluation.
 
 ## Practical closeness criterion
 
-We set the practical closeness margin at 0.05 log-loss units per round. For each training size, we will compare the Transformer with the Bayesian oracle using Δ = Transformer log loss − Bayesian-oracle log loss. We will call the Transformer sufficiently close at that training size only if the upper bound of the 95% uncertainty interval for Δ is below 0.05. If the interval crosses 0.05, the result is inconclusive relative to this margin.
+We set the practical closeness margin at 0.05 log-loss units per round. For each training size, we will compare the post-training probe’s strategy probabilities with the Bayesian oracle’s probabilities, scoring both against the strategy that was actually active. We define Δ = probe strategy log loss − Bayesian-oracle strategy log loss. We will call the probe’s estimates sufficiently close at that training size only if the upper bound of the 95% uncertainty interval for Δ is below 0.05. If the interval crosses 0.05, the result is inconclusive relative to this margin.
 
-This criterion applies to the specified synthetic game and primary strategy-prediction measure. It does not establish that the Transformer reasons like a person.
+This criterion applies to strategy estimates read from the Transformer’s frozen internal patterns in this synthetic game. It does not mean the Transformer was trained to output strategy beliefs, or that it reasons like a person.
 
 ## Data and splits
 
@@ -87,32 +76,31 @@ This gives us 65,000 unique cases in total, or 1,040,000 rounds. We will train f
 
 ## Primary success measure
 
-The primary measure is **strategy-probability log loss**.
+The primary measure is strategy-probability log loss from the post-training probe. The probe produces probabilities for each of the four possible active strategies on each test round. We score those probabilities against the strategy that was actually active. Lower loss is better.
 
-Before each move, after seeing the current situation and clue, the Transformer predicts probabilities for the four possible active strategies. For each round, we score how much probability it assigned to the strategy that was actually active. We average the 16 round scores within each case, then average across the 10,000 test cases. Lower loss is better.
-
-We will compare the Transformer and Bayesian oracle on the same test cases. The Bayesian oracle knows the game’s generating rules, so it is our reference for how well strategy uncertainty can be estimated in this setting. The main result will be the difference:
-
-**Δ = Transformer log loss − Bayesian-oracle log loss**
-
-A positive Δ means the Transformer had higher loss on the test set. A negative Δ means it had lower observed loss on that finite test set; it does not by itself show that the Transformer is better in expectation than an oracle that knows the correct rules.
+We compare the probe with the Bayesian oracle on the same test cases. The detailed scoring procedure and the definition of Δ appear below under “Primary strategy-belief measure.” The Transformer’s direct next-move predictions are reported separately as other measures.
 
 ## Other measures
 
 We will also report:
 
-- Log loss and Brier score for next-move predictions.
-- Strategy top-choice accuracy.
-- Move prediction accuracy.
-- Calibration plots, which compare stated confidence with how often predictions are correct.
+*Transformer next-move log loss and Brier score.
+
+*Transformer move prediction accuracy.
+
+*Probe strategy top-choice accuracy.
+
+*Calibration plots for the Transformer’s move probabilities and the probe’s strategy probabilities. These plots compare stated confidence with how often the corresponding predictions are correct.
+
+
 
 ## Comparing results and estimating uncertainty
 
-For each Transformer run, we will calculate the paired difference in log loss from the Bayesian oracle on each test case. We will estimate a 95% uncertainty interval by repeatedly sampling complete test cases with replacement and recalculating the average difference. Each sample will keep all 16 rounds of a case together. We will use the same sampled cases for both models.
+For each training run, we will calculate the probe’s paired difference in strategy log loss from the Bayesian oracle on each test case. We will estimate a 95% uncertainty interval by repeatedly sampling complete test cases with replacement and recalculating the average difference. Each sample will keep all 16 rounds of a case together, and the same sampled cases will be used for both the probe and oracle.
 
-We will use 10,000 bootstrap resamples. This applies a paired bootstrap approach used in model evaluation; using a complete case as the resampling unit is our design choice because rounds within a case share a history and hidden strategy. [Koehn, 2004](https://aclanthology.org/W04-3250/)
+We will use 10,000 bootstrap resamples. Using a complete case as the resampling unit is our design choice because rounds within a case share a history and hidden strategy. Koehn, 2004.
 
-We will report the five training runs separately as well as their average and variation. The case-resampling interval describes uncertainty across test cases for these runs; the variation across runs shows sensitivity to training randomness. An interval that includes zero will not, by itself, count as proof that the Transformer and oracle are equivalent. Any “close enough” threshold must be chosen before the final test.
+We will report the five training runs separately, as well as their average and variation. The case-resampling interval describes uncertainty across test cases for these trained runs; the variation across runs shows sensitivity to training randomness. An interval that includes zero does not by itself prove that the Transformer and oracle are equivalent.
 
 ## Human-facing game and stories
 
@@ -120,13 +108,11 @@ The player may predict or watch in spectator mode. The post-case debrief will sh
 
 Cases should be mostly original, with any public-domain Holmes inspirations credited. Stories should give players a chain of evidence to assess rather than imply that one clue alone proves guilt. The social-theory literature review can guide how we present clues, roles, and interpretations; it will not be used to claim that simulated strategies represent real people’s motives.
 
-## Per-round model input and answer labels
+## Per-round model input and labels
 
-### What the model receives
+At round *t*, the Transformer receives the completed rounds so far and the current situation and clue. It does not receive information from future rounds.
 
-For each prediction, the input contains the observed history and the current round’s situation and clue. It does not contain anything from future rounds.
-
-Each completed round is encoded as four structured symbols:
+Each completed round is encoded as:
 
 `<ROUND_START> <SIT_i> <CLUE_j> <MOVE_A or MOVE_B>`
 
@@ -134,36 +120,27 @@ The current, not-yet-completed round is encoded as:
 
 `<ROUND_START> <SIT_i> <CLUE_j> <PREDICT>`
 
-For example:
+### Transformer training
 
-`<ROUND_START> <SIT_2> <CLUE_1> <MOVE_B> <ROUND_START> <SIT_4> <CLUE_3> <PREDICT>`
+The Transformer is trained to predict the current move, `MOVE_A` or `MOVE_B`. Its output is a probability for A and a probability for B.
 
-Here, the first round is already complete, while the model is being asked to predict the move and active strategy in the second round. At round 16, the sequence contains at most 64 symbols: four for each round.
+The current move is used as the training answer, but it is not part of the input for that prediction. After the move is revealed, it becomes part of the history for the next round.
 
-### What the model predicts
+The Transformer is not trained on the hidden strategy or the Bayesian posterior. It has no strategy-prediction output head in this baseline.
 
-For each round, the model produces two probability distributions:
+### Evaluation-only information and probing
 
-- **Active-strategy probabilities:** one probability for each of the four strategies.
-- **Move probabilities:** one probability for A and one for B.
+A separate evaluation record stores the actual active strategy and the Bayesian oracle’s posterior for each round. These are not included in the Transformer’s training input or training loss.
 
-### Answer labels used for training and scoring
+After the Transformer has been trained, it is frozen. A separate probe may then use its internal activations and active-strategy labels from the validation cases to estimate the active strategy. The probe does not update the Transformer. The test cases remain untouched until final evaluation.
 
-Each prediction example has two answer labels stored separately from its input:
+## Primary strategy-belief measure
 
-| Label | What it records |
-|---|---|
-| `active_strategy` | The strategy actually active in this round: one of `STRAT_1` through `STRAT_4` |
-| `move` | The move actually chosen this round: `MOVE_A` or `MOVE_B` |
+We will compare the probe’s four strategy probabilities with the Bayesian oracle’s probabilities by scoring both against the actual active strategy on the same held-out test rounds. The primary score is strategy log loss; lower is better.
 
-The strategy label is used to train and score the strategy-prediction output. The move label is used to train and score the move-prediction output. Neither label is included in the model input for that same round.
+Let Δ equal the probe’s log loss minus the oracle’s log loss. Our practical closeness margin remains 0.05 log-loss units per round. We will call the probe’s strategy estimates sufficiently close only if the upper bound of the 95% uncertainty interval for Δ is below 0.05.
 
-### When a move becomes visible
-
-The move for the current round is hidden while the model predicts. After it is revealed, it is added to the observed history as `MOVE_A` or `MOVE_B` for the next round’s prediction.
-
-Training examples will be made from the observed prefix at each round. We will split data by complete case **before** creating these per-round examples, so rounds from one case cannot appear in different data splits.
-
+This tests whether strategy information can be read from the Transformer’s frozen internal representations. It does not mean the Transformer was trained to output strategy beliefs.
 ### Information excluded from the first experiment
 
 The Transformer input will not include:
