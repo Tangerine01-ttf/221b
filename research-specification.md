@@ -120,6 +120,64 @@ The player may predict or watch in spectator mode. The post-case debrief will sh
 
 Cases should be mostly original, with any public-domain Holmes inspirations credited. Stories should give players a chain of evidence to assess rather than imply that one clue alone proves guilt. The social-theory literature review can guide how we present clues, roles, and interpretations; it will not be used to claim that simulated strategies represent real people’s motives.
 
+## Per-round model input and answer labels
+
+### What the model receives
+
+For each prediction, the input contains the observed history and the current round’s situation and clue. It does not contain anything from future rounds.
+
+Each completed round is encoded as four structured symbols:
+
+`<ROUND_START> <SIT_i> <CLUE_j> <MOVE_A or MOVE_B>`
+
+The current, not-yet-completed round is encoded as:
+
+`<ROUND_START> <SIT_i> <CLUE_j> <PREDICT>`
+
+For example:
+
+`<ROUND_START> <SIT_2> <CLUE_1> <MOVE_B> <ROUND_START> <SIT_4> <CLUE_3> <PREDICT>`
+
+Here, the first round is already complete, while the model is being asked to predict the move and active strategy in the second round. At round 16, the sequence contains at most 64 symbols: four for each round.
+
+### What the model predicts
+
+For each round, the model produces two probability distributions:
+
+- **Active-strategy probabilities:** one probability for each of the four strategies.
+- **Move probabilities:** one probability for A and one for B.
+
+### Answer labels used for training and scoring
+
+Each prediction example has two answer labels stored separately from its input:
+
+| Label | What it records |
+|---|---|
+| `active_strategy` | The strategy actually active in this round: one of `STRAT_1` through `STRAT_4` |
+| `move` | The move actually chosen this round: `MOVE_A` or `MOVE_B` |
+
+The strategy label is used to train and score the strategy-prediction output. The move label is used to train and score the move-prediction output. Neither label is included in the model input for that same round.
+
+### When a move becomes visible
+
+The move for the current round is hidden while the model predicts. After it is revealed, it is added to the observed history as `MOVE_A` or `MOVE_B` for the next round’s prediction.
+
+Training examples will be made from the observed prefix at each round. We will split data by complete case **before** creating these per-round examples, so rounds from one case cannot appear in different data splits.
+
+### Information excluded from the first experiment
+
+The Transformer input will not include:
+
+- The hidden active-strategy label.
+- The current or any future move before it is revealed.
+- Future-round situations or clues.
+- Case IDs, random seeds, or other bookkeeping information.
+- Story text, player scores, human predictions, explanations, or the Bayesian belief chart.
+
+The Bayesian oracle receives the same observable history, situation, and clue as the Transformer, plus the known game-generation rules. Its probability estimates are used for comparison; they are not Transformer inputs.
+
+Story text remains reserved for a separate experiment after the structured-symbol baseline has been evaluated.
+
 ## Limits and safeguards
 
 - The first dataset is synthetic.
