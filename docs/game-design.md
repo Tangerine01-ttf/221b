@@ -16,6 +16,7 @@ The first version is an **observer game**: the player’s prediction does not af
 - There are four hidden strategies, equally likely at the start of a case.
 - Each strategy favors one of the four situations.
 - The opponent chooses between move A and move B.
+- The mapping is one-to-one: exactly one strategy favors each situation. At the start of each case, the strategy is sampled uniformly. For the final bonus guess, the player chooses which situation is favored by the strategy active during round 16.
 
 ## Intermediate baseline probabilities
 
