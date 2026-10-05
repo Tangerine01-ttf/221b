@@ -65,6 +65,12 @@ We will compare the Transformer with:
 
 The Bayesian oracle is a reference for this designed environment. It does not represent perfect reasoning in every detective story or real-world situation.
 
+## Practical closeness criterion
+
+We set the practical closeness margin at 0.05 log-loss units per round. For each training size, we will compare the Transformer with the Bayesian oracle using Δ = Transformer log loss − Bayesian-oracle log loss. We will call the Transformer sufficiently close at that training size only if the upper bound of the 95% uncertainty interval for Δ is below 0.05. If the interval crosses 0.05, the result is inconclusive relative to this margin.
+
+This criterion applies to the specified synthetic game and primary strategy-prediction measure. It does not establish that the Transformer reasons like a person.
+
 ## Data and splits
 
 Each case contains 16 rounds. We will keep all rounds from a case together so that one case cannot appear in both training and evaluation.
