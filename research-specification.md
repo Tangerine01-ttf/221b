@@ -1,6 +1,6 @@
 # 221B Research Specification
 
-**Status:** Draft v0.2  
+**Status:** Draft v0.3  
 **Purpose:** Define the first controlled experiment before game or model implementation. The primary evaluation measure has been selected; other experiment details remain open.
 
 ## Research question
@@ -65,26 +65,48 @@ We will compare the Transformer with:
 
 The Bayesian oracle is a reference for this designed environment. It does not represent perfect reasoning in every detective story or real-world situation.
 
+## Data and splits
+
+Each case contains 16 rounds. We will keep all rounds from a case together so that one case cannot appear in both training and evaluation.
+
+The training sets will be nested:
+
+- 1,000 cases
+- 10,000 cases, including the 1,000-case set
+- 50,000 cases, including the 10,000-case set
+
+We will also create separate sets of 5,000 validation cases and 10,000 test cases. The validation and test cases will not appear in training.
+
+This gives us 65,000 unique cases in total, or 1,040,000 rounds. We will train five independently initialized Transformer runs at each training size: 15 runs altogether. We will use the same validation and test cases for every run. Model choices will use the validation set; the test set will remain untouched until final evaluation.
+
 ## Primary success measure
 
-The primary measure is **strategy-probability log loss** on held-out test cases.
+The primary measure is **strategy-probability log loss**.
 
-Before each move, the Transformer assigns probabilities to the four strategies. Afterward, we compare those probabilities with the strategy that was actually active. For each round, the loss is the negative logarithm of the probability assigned to the true strategy. Lower average loss is better; assigning very low probability to the true strategy is penalized heavily.
+Before each move, after seeing the current situation and clue, the Transformer predicts probabilities for the four possible active strategies. For each round, we score how much probability it assigned to the strategy that was actually active. We average the 16 round scores within each case, then average across the 10,000 test cases. Lower loss is better.
 
-We will compare the Transformer and Bayesian oracle on the same test cases. This measure evaluates the quality of the probability estimates, not only whether the most likely strategy was guessed correctly.
+We will compare the Transformer and Bayesian oracle on the same test cases. The Bayesian oracle knows the game’s generating rules, so it is our reference for how well strategy uncertainty can be estimated in this setting. The main result will be the difference:
+
+**Δ = Transformer log loss − Bayesian-oracle log loss**
+
+A positive Δ means the Transformer had higher loss on the test set. A negative Δ means it had lower observed loss on that finite test set; it does not by itself show that the Transformer is better in expectation than an oracle that knows the correct rules.
 
 ## Other measures
 
-Secondary measures will include:
+We will also report:
 
-- Log loss and Brier score for predicting the next move.
+- Log loss and Brier score for next-move predictions.
 - Strategy top-choice accuracy.
 - Move prediction accuracy.
 - Calibration plots, which compare stated confidence with how often predictions are correct.
 
-We will keep all rounds from a case together in the training, tuning, or test split. This prevents rounds from the same case from appearing in both training and evaluation. We will use the tuning split for model choices and reserve the test split for final evaluation.
+## Comparing results and estimating uncertainty
 
-The exact dataset size, confidence-interval method, and statistical analysis still need to be set before the final test.
+For each Transformer run, we will calculate the paired difference in log loss from the Bayesian oracle on each test case. We will estimate a 95% uncertainty interval by repeatedly sampling complete test cases with replacement and recalculating the average difference. Each sample will keep all 16 rounds of a case together. We will use the same sampled cases for both models.
+
+We will use 10,000 bootstrap resamples. This applies a paired bootstrap approach used in model evaluation; using a complete case as the resampling unit is our design choice because rounds within a case share a history and hidden strategy. [Koehn, 2004](https://aclanthology.org/W04-3250/)
+
+We will report the five training runs separately as well as their average and variation. The case-resampling interval describes uncertainty across test cases for these runs; the variation across runs shows sensitivity to training randomness. An interval that includes zero will not, by itself, count as proof that the Transformer and oracle are equivalent. Any “close enough” threshold must be chosen before the final test.
 
 ## Human-facing game and stories
 
