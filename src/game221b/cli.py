@@ -5,6 +5,24 @@ import secrets
 from .oracle import OraclePrediction, predict_before_move
 from .simulator import GeneratedCase, TrainingExample, generate_case
 
+SITUATION_TEXT = (
+    "A bell rings after dark",
+    "An oil lamp suddenly goes out",
+    "Rain sweeps across the courtyard",
+    "An unexpected visitor arrives",
+)
+
+# Temporary text marks for the four seals; their meanings appear in the debrief.
+SEAL_MARKS = ("C|||", "/\\.", "~|~", "o o<")
+SEAL_NAMES = ("Echo", "Ember", "River", "Footstep")
+SEAL_MEANINGS = (
+    "a broken ring with three short rays; linked to the bell",
+    "a small flame with a missing stroke; linked to the lamp",
+    "three waves with one broken line; linked to the rain",
+    "two prints, one turned backwards; linked to the visitor",
+)
+
+ROUTE_NAMES = {"A": "North Path", "B": "South Path"}
 
 def _choose_mode() -> str:
     print("\nChoose a mode:")
@@ -22,7 +40,7 @@ def _choose_mode() -> str:
 
 def _choose_move() -> str:
     while True:
-        move = input("Your prediction, A or B: ").strip().upper()
+        move = input("Your route prediction: A (North Path) or B (South Path): ").strip().upper()
         if move in {"A", "B"}:
             return move
         print("Please enter A or B.")
@@ -49,8 +67,24 @@ def _show_debrief(
     else:
         print("Spectator mode: no predictions were scored.")
 
-    print("\nClues, moves, predictions, and revealed strategies")
-    print("Rnd | Situation | Clue | Move | Guess | Result | Active strategy")
+    print("\nRoute key: A = North Path; B = South Path")
+    print("Situation key:")
+    for number, description in enumerate(SITUATION_TEXT, start=1):
+        print(f"  Situation {number}: {description}")
+    print("Seal key:")
+    for number, (name, meaning) in enumerate(
+        zip(SEAL_NAMES, SEAL_MEANINGS),
+        start=1,
+    ):
+        print(f"  Clue C{number} ({name}): {meaning}")
+
+    print(
+        "The hidden playbook can switch between rounds; the table shows "
+        "which situation it favored each round.\nThe seal is a noisy clue about the playbook; it does not choose the route. The matching seal appears 40% of the time, and each other seal 20%.\nNorth is chosen 65% of the time in the favored situation and 35% elsewhere.\nBefore each later round, the playbook has a 5% chance to switch to one of the other three."
+    )
+
+    print("\nRoutes, seal clues, predictions, and hidden patterns")
+    print("Rnd | Situation | Clue | Route | Guess | Result | Active playbook")
     print("-" * 72)
 
     for index, (example, label, guess) in enumerate(
@@ -72,7 +106,7 @@ def _show_debrief(
             f"{example.move_target:<4} | "
             f"{guess_text:<5} | "
             f"{result:<7} | "
-            f"Strategy {strategy} (favors Situation {strategy})"
+            f"Playbook {strategy} (favors Situation {strategy})"
         )
 
     print("\nBayesian belief chart")
@@ -94,8 +128,21 @@ def _play_case(mode: str) -> None:
     oracle_predictions: list[OraclePrediction] = []
     score = 0
 
-    print("\nNew 16-round case")
-    print("Strategies and Bayesian beliefs stay hidden until the debrief.")
+    print("\nCASE 1: The Manuscript Meant for You")
+    print("Fictional historical Nalanda; the exact year is unspecified.")
+    print(
+    "\nAt Nalanda, a sealed manuscript arrives bearing your name—and yours alone. "
+    "A trusted messenger is bringing it before sunrise. Its warning could put "
+    "people in danger if it falls into the wrong hands. Someone else may be "
+    "searching for the messenger, who can take the North Path or the South Path."
+)
+    print(
+    "\nYou have sixteen coded dispatches. Each records one event and carries a "
+    "strange mark. Some marks may mislead you. Study the pattern and predict "
+    "each route so you can be the first to receive the manuscript."
+)
+    print("\nThe hidden patterns and Bayesian beliefs stay hidden until the debrief.")
+
 
     for index, example in enumerate(case.training_examples):
         model_input = example.model_input
@@ -103,17 +150,20 @@ def _play_case(mode: str) -> None:
         oracle_predictions.append(oracle_prediction)
 
         print(f"\nRound {index + 1}/16")
-        print(f"Situation: {model_input.situation + 1}")
-        print(f"Clue:      {model_input.clue + 1}")
+        print(f"Situation: {SITUATION_TEXT[model_input.situation]}")
+        print(f"Seal:      {SEAL_MARKS[model_input.clue]}")
 
         if mode == "predict":
             guess = _choose_move()
         else:
-            input("Press Enter to reveal the opponent's move: ")
+            input("Press Enter to reveal the messenger's route: ")
             guess = None
 
         guesses.append(guess)
-        print(f"Opponent chose: {example.move_target}")
+        print(
+    f"The messenger took the {ROUTE_NAMES[example.move_target]} "
+    f"({example.move_target})."
+)
 
         if guess is not None:
             if guess == example.move_target:
