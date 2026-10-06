@@ -16,7 +16,7 @@ The first version is an **observer game**: the player’s prediction does not af
 - There are four hidden strategies, equally likely at the start of a case.
 - Each strategy favors one of the four situations.
 - The opponent chooses between move A and move B.
-- The mapping is one-to-one: exactly one strategy favors each situation. At the start of each case, the strategy is sampled uniformly. For the final bonus guess, the player chooses which situation is favored by the strategy active during round 16.
+- The mapping is one-to-one: exactly one strategy favors each situation. At the start of each case, the strategy is sampled uniformly. Case 1 has no final strategy-identification bonus guess; the score counts route predictions only.
 
 ## Intermediate baseline probabilities
 
@@ -101,7 +101,7 @@ These are original fictional marks, not historical Nalanda writing or religious 
 
 **Scoring:** Give one point per correct route prediction, for a score out of 16. In this first case, the score is feedback only; it does not decide whether the manuscript reaches its intended recipient.
 
-**Debrief:** Reveal the seal key and the messenger’s true strategy across the case. Explain that the matching seal appears 40% of the time and each other seal 20% of the time. In the favored situation, North is chosen 65% of the time; in the other situations, 35%. Show the route-and-score chart and the Bayesian belief chart.
+**Debrief:** Reveal the seal key and the hidden strategy used in each round, including any switches. Explain that the matching seal appears 40% of the time and each other seal 20% of the time. In the favored situation, North is chosen 65% of the time; in the other situations, 35%. Show the route-and-score chart and the Bayesian belief chart.
 
 **Research separation:** This story is for the player-facing game. Keep the first Transformer experiment’s structured-symbol inputs unchanged; test story text separately later.
 
