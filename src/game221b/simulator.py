@@ -9,9 +9,31 @@ Move = Literal["A", "B"]
 NUM_CATEGORIES = 4
 ROUNDS_PER_CASE = 16
 
-STRATEGY_SWITCH_PROBABILITY = 0.05
-CLUE_MATCH_PROBABILITY = 0.40
-P_A_IN_FAVORED_SITUATION = 0.65
+
+@dataclass(frozen=True)
+class DifficultySettings:
+    """Probability settings that define one case difficulty."""
+
+    name: str
+    p_a_in_favored_situation: float
+    clue_match_probability: float
+    strategy_switch_probability: float
+
+
+DIFFICULTIES = {
+    "1": DifficultySettings("Easy", 0.85, 0.70, 0.01),
+    "2": DifficultySettings("Moderate", 0.75, 0.55, 0.02),
+    "3": DifficultySettings("Intermediate", 0.65, 0.40, 0.05),
+    "4": DifficultySettings("Hard", 0.60, 0.32, 0.10),
+    "5": DifficultySettings("Advanced", 0.55, 0.27, 0.15),
+}
+
+DEFAULT_DIFFICULTY = DIFFICULTIES["3"]
+
+# Keep the existing game behavior at Intermediate until we connect the menu.
+STRATEGY_SWITCH_PROBABILITY = DEFAULT_DIFFICULTY.strategy_switch_probability
+CLUE_MATCH_PROBABILITY = DEFAULT_DIFFICULTY.clue_match_probability
+P_A_IN_FAVORED_SITUATION = DEFAULT_DIFFICULTY.p_a_in_favored_situation
 
 
 @dataclass(frozen=True)
@@ -56,7 +78,10 @@ class GeneratedCase:
     seed: int
 
 
-def generate_case(seed: int) -> GeneratedCase:
+def generate_case(
+    seed: int,
+    difficulty: DifficultySettings = DEFAULT_DIFFICULTY,
+) -> GeneratedCase:
     """Generate one reproducible 16-round case."""
 
     rng = random.Random(seed)
@@ -67,7 +92,7 @@ def generate_case(seed: int) -> GeneratedCase:
 
     for round_index in range(ROUNDS_PER_CASE):
         # A strategy can switch between rounds, but never after the final round.
-        if round_index > 0 and rng.random() < STRATEGY_SWITCH_PROBABILITY:
+        if round_index > 0 and rng.random() < difficulty.strategy_switch_probability:
             alternatives = [
                 strategy
                 for strategy in range(NUM_CATEGORIES)
@@ -79,7 +104,7 @@ def generate_case(seed: int) -> GeneratedCase:
 
         # The active strategy's clue appears 40% of the time.
         # Each of the other three clues therefore appears 20% of the time.
-        if rng.random() < CLUE_MATCH_PROBABILITY:
+        if rng.random() < difficulty.clue_match_probability:
             clue = active_strategy
         else:
             other_clues = [
@@ -90,9 +115,9 @@ def generate_case(seed: int) -> GeneratedCase:
             clue = rng.choice(other_clues)
 
         probability_of_a = (
-            P_A_IN_FAVORED_SITUATION
+            difficulty.p_a_in_favored_situation
             if situation == active_strategy
-            else 1 - P_A_IN_FAVORED_SITUATION
+            else 1 - difficulty.p_a_in_favored_situation
         )
         move: Move = "A" if rng.random() < probability_of_a else "B"
 

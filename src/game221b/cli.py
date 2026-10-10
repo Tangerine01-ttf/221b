@@ -3,7 +3,14 @@ from __future__ import annotations
 import secrets
 
 from .oracle import OraclePrediction, predict_before_move
-from .simulator import GeneratedCase, TrainingExample, generate_case
+from .simulator import (
+    DEFAULT_DIFFICULTY,
+    DIFFICULTIES,
+    DifficultySettings,
+    GeneratedCase,
+    TrainingExample,
+    generate_case,
+)
 
 SITUATION_TEXT = (
     "A bell rings after dark",
@@ -37,6 +44,16 @@ def _choose_mode() -> str:
             return "spectate"
         print("Please enter 1 or 2.")
 
+def _choose_difficulty() -> DifficultySettings:
+    print("\nChoose a difficulty:")
+    for number, difficulty in DIFFICULTIES.items():
+        print(f"{number}. {difficulty.name}")
+
+    while True:
+        choice = input("Choose 1-5: ").strip()
+        if choice in DIFFICULTIES:
+            return DIFFICULTIES[choice]
+        print("Please enter a number from 1 to 5.")
 
 def _choose_move() -> str:
     while True:
@@ -57,6 +74,7 @@ def _show_debrief(
     oracle_predictions: list[OraclePrediction],
     score: int,
     mode: str,
+    difficulty: DifficultySettings,
 ) -> None:
     print("\n" + "=" * 72)
     print("CASE DEBRIEF")
@@ -78,9 +96,26 @@ def _show_debrief(
     ):
         print(f"  Clue C{number} ({name}): {meaning}")
 
+    matching_clue_probability = difficulty.clue_match_probability
+    other_clue_probability = (
+        1 - matching_clue_probability
+    ) / (len(SEAL_MARKS) - 1)
+    favored_north_probability = difficulty.p_a_in_favored_situation
+    other_north_probability = 1 - favored_north_probability
+    print(f"\nDifficulty: {difficulty.name}")
     print(
         "The hidden playbook can switch between rounds; the table shows "
-        "which situation it favored each round.\nThe seal is a noisy clue about the playbook; it does not choose the route. The matching seal appears 40% of the time, and each other seal 20%.\nNorth is chosen 65% of the time in the favored situation and 35% elsewhere.\nBefore each later round, the playbook has a 5% chance to switch to one of the other three."
+        "which situation it favored each round.\n"
+        "The seal is a noisy clue about the playbook; it does not choose "
+        "the route. "
+        f"The matching seal appears {matching_clue_probability:.1%} of the time, "
+        f"and each other seal {other_clue_probability:.1%}.\n"
+        f"North is chosen {favored_north_probability:.0%} of the time in "
+        "the favored situation and "
+        f"{other_north_probability:.0%} elsewhere.\n"
+        "Before each later round, the playbook has a "
+        f"{difficulty.strategy_switch_probability:.0%} chance to switch "
+        "to one of the other three."
     )
 
     print("\nRoutes, seal clues, predictions, and hidden patterns")
@@ -121,9 +156,12 @@ def _show_debrief(
         print(f"Round {index:02}: {bars}")
 
 
-def _play_case(mode: str) -> None:
+def _play_case(
+    mode: str,
+    difficulty: DifficultySettings,
+) -> None:
     seed = secrets.randbits(32)
-    case = generate_case(seed)
+    case = generate_case(seed, difficulty)
     guesses: list[str | None] = []
     oracle_predictions: list[OraclePrediction] = []
     score = 0
@@ -146,7 +184,7 @@ def _play_case(mode: str) -> None:
 
     for index, example in enumerate(case.training_examples):
         model_input = example.model_input
-        oracle_prediction = predict_before_move(model_input)
+        oracle_prediction = predict_before_move(model_input, difficulty)
         oracle_predictions.append(oracle_prediction)
 
         print(f"\nRound {index + 1}/16")
@@ -175,18 +213,18 @@ def _play_case(mode: str) -> None:
         if index + 1 < len(case.training_examples):
             input("Press Enter for the next round...")
 
-    _show_debrief(case, guesses, oracle_predictions, score, mode)
+    _show_debrief(case, guesses, oracle_predictions, score, mode, difficulty)
 
 
 def main() -> None:
     while True:
         mode = _choose_mode()
-        _play_case(mode)
+        difficulty = _choose_difficulty()
+        _play_case(mode, difficulty)
 
         again = input("\nPlay another case? (y/N): ").strip().lower()
         if again not in {"y", "yes"}:
             break
-
 
 if __name__ == "__main__":
     main()

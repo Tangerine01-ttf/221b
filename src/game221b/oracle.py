@@ -4,10 +4,9 @@ from dataclasses import dataclass
 from math import isfinite
 
 from .simulator import (
-    CLUE_MATCH_PROBABILITY,
+    DEFAULT_DIFFICULTY,
+    DifficultySettings,
     NUM_CATEGORIES,
-    P_A_IN_FAVORED_SITUATION,
-    STRATEGY_SWITCH_PROBABILITY,
     ModelInput,
 )
 
@@ -34,15 +33,20 @@ def _normalize(weights: list[float]) -> tuple[float, ...]:
     return tuple(weight / total for weight in weights)
 
 
-def _transition(belief: tuple[float, ...]) -> tuple[float, ...]:
-    """Apply the 5% chance of switching to one of the other strategies."""
+def _transition(
+    belief: tuple[float, ...],
+    difficulty: DifficultySettings,
+) -> tuple[float, ...]:
+    """Apply the selected difficulty's playbook-switch chance."""
 
-    switch_to_each_other = STRATEGY_SWITCH_PROBABILITY / (NUM_CATEGORIES - 1)
+    switch_to_each_other = (
+        difficulty.strategy_switch_probability / (NUM_CATEGORIES - 1)
+    )
 
     new_belief = []
     for next_strategy in range(NUM_CATEGORIES):
         probability = belief[next_strategy] * (
-            1 - STRATEGY_SWITCH_PROBABILITY
+            1 - difficulty.strategy_switch_probability
         )
         probability += sum(
             belief[old_strategy] * switch_to_each_other
@@ -54,21 +58,30 @@ def _transition(belief: tuple[float, ...]) -> tuple[float, ...]:
     return _normalize(new_belief)
 
 
-def _clue_likelihood(clue: int, strategy: int) -> float:
+def _clue_likelihood(
+    clue: int,
+    strategy: int,
+    difficulty: DifficultySettings,
+) -> float:
     """Probability of seeing this clue if this strategy is active."""
 
     if clue == strategy:
-        return CLUE_MATCH_PROBABILITY
-    return (1 - CLUE_MATCH_PROBABILITY) / (NUM_CATEGORIES - 1)
+        return difficulty.clue_match_probability
+    return (1 - difficulty.clue_match_probability) / (NUM_CATEGORIES - 1)
 
 
-def _move_likelihood(move: str, situation: int, strategy: int) -> float:
+def _move_likelihood(
+    move: str,
+    situation: int,
+    strategy: int,
+    difficulty: DifficultySettings,
+) -> float:
     """Probability of seeing this move under the situation and strategy."""
 
     probability_of_a = (
-        P_A_IN_FAVORED_SITUATION
+        difficulty.p_a_in_favored_situation
         if situation == strategy
-        else 1 - P_A_IN_FAVORED_SITUATION
+        else 1 - difficulty.p_a_in_favored_situation
     )
 
     if move == "A":
@@ -80,6 +93,7 @@ def _move_likelihood(move: str, situation: int, strategy: int) -> float:
 
 def strategy_posterior_before_move(
     model_input: ModelInput,
+    difficulty: DifficultySettings = DEFAULT_DIFFICULTY,
 ) -> tuple[float, ...]:
     """Estimate the active strategy after the current clue, before the move."""
 
@@ -89,13 +103,14 @@ def strategy_posterior_before_move(
     # switch; then use that round's clue and revealed move as evidence.
     for round_index, past_round in enumerate(model_input.history):
         if round_index > 0:
-            belief = _transition(belief)
+            belief = _transition(belief, difficulty)
 
         _check_category(past_round.situation, "Past situation")
         _check_category(past_round.clue, "Past clue")
 
         belief = _normalize([
-            belief[strategy] * _clue_likelihood(past_round.clue, strategy)
+            belief[strategy]
+            * _clue_likelihood(past_round.clue, strategy, difficulty)
             for strategy in range(NUM_CATEGORIES)
         ])
         belief = _normalize([
@@ -104,13 +119,14 @@ def strategy_posterior_before_move(
                 past_round.move,
                 past_round.situation,
                 strategy,
+                difficulty,
             )
             for strategy in range(NUM_CATEGORIES)
         ])
 
     # Move from the last completed round's strategy to the current round.
     if model_input.history:
-        belief = _transition(belief)
+        belief = _transition(belief, difficulty)
 
     _check_category(model_input.situation, "Current situation")
     _check_category(model_input.clue, "Current clue")
@@ -119,22 +135,27 @@ def strategy_posterior_before_move(
     # provides no evidence about strategy. The current clue does.
     return _normalize([
         belief[strategy]
-        * _clue_likelihood(model_input.clue, strategy)
+        * _clue_likelihood(model_input.clue, strategy, difficulty)
         for strategy in range(NUM_CATEGORIES)
     ])
 
-
-def predict_before_move(model_input: ModelInput) -> OraclePrediction:
+def predict_before_move(
+    model_input: ModelInput,
+    difficulty: DifficultySettings = DEFAULT_DIFFICULTY,
+) -> OraclePrediction:
     """Return strategy and A/B probabilities using only visible information."""
 
-    strategy_probabilities = strategy_posterior_before_move(model_input)
+    strategy_probabilities = strategy_posterior_before_move(
+        model_input,
+        difficulty,
+    )
 
     probability_of_a = sum(
         strategy_probabilities[strategy]
         * (
-            P_A_IN_FAVORED_SITUATION
+            difficulty.p_a_in_favored_situation
             if model_input.situation == strategy
-            else 1 - P_A_IN_FAVORED_SITUATION
+            else 1 - difficulty.p_a_in_favored_situation
         )
         for strategy in range(NUM_CATEGORIES)
     )
